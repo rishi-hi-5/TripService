@@ -1,0 +1,320 @@
+openapi: 3.0.3
+info:
+  title: Trip Service API
+  description: API for managing trips in the transport system
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Trips
+    description: Operations related to trips
+  - name: TripStops
+    description: Operations related to trip stops
+paths:
+  /trips:
+    post:
+      tags:
+        - Trips
+      summary: Create a new trip
+      operationId: createTrip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripRequest'
+      responses:
+        '201':
+          description: Trip successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+    get:
+      tags:
+        - Trips
+      summary: Get a list of all trips (Source & Destination only)
+      operationId: getTrips
+      responses:
+        '200':
+          description: A list of trip summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripSummary'
+
+  /trips/{id}:
+    get:
+      tags:
+        - Trips
+      summary: Get details of a specific trip
+      operationId: getTripById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Trip details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '404':
+          description: Trip not found
+
+    put:
+      tags:
+        - Trips
+      summary: Update trip details (assign driver/vehicle)
+      operationId: updateTrip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripUpdateRequest'
+      responses:
+        '200':
+          description: Trip successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '404':
+          description: Trip not found
+
+    delete:
+      tags:
+        - Trips
+      summary: Cancel a trip
+      operationId: deleteTrip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Trip successfully canceled
+        '404':
+          description: Trip not found
+
+  /trips/{id}/stops:
+    post:
+      tags:
+        - TripStops
+      summary: Add stops to a trip
+      operationId: addTripStops
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripStopsRequest'
+      responses:
+        '200':
+          description: Stops added successfully
+        '404':
+          description: Trip not found
+  /trips/{tripId}/stops/{stopId}:
+    put:
+      tags:
+        - TripStops
+      summary: Update a trip stop (Mark arrival/completion)
+      operationId: updateTripStop
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripStopUpdateRequest'
+      responses:
+        '200':
+          description: Stop updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripStop'
+        '404':
+          description: Trip or stop not found
+    delete:
+      tags:
+        - TripStops
+      summary: Remove a stop from a trip
+      operationId: deleteTripStop
+      parameters:
+        - name: tripId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Stop successfully deleted
+        '404':
+          description: Trip or stop not found
+
+components:
+  schemas:
+    Trip:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+          nullable: true
+        vehicleId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [ PENDING, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELED, FAILED ]
+        capacity:
+          type: number
+        loadType:
+          type: string
+          enum: [ PARTIAL_LOAD, DEDICATED_LOAD ]
+        scheduledTime:
+          type: string
+          format: local-date-time
+        startTime:
+          type: string
+          format: local-date-time
+          nullable: true
+        endTime:
+          type: string
+          format: local-date-time
+          nullable: true
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripStop'
+    TripStopsRequest:
+      type: array
+      items:
+        $ref: '#/components/schemas/TripStop'
+
+    TripStop:
+      type: object
+      properties:
+        location:
+          type: string
+        stopType:
+          type: string
+          enum: [PICKUP, DROPOFF]
+        sequence:
+          type: integer
+        loadQuantity:
+          type: number
+        scheduledTime:
+          type: string
+          format: local-date-time
+        actualTime:
+          type: string
+          format: local-date-time
+          nullable: true
+
+    TripRequest:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        capacity:
+          type: number
+        loadType:
+          type: string
+          enum: [PARTIAL_LOAD, DEDICATED_LOAD]
+        scheduledTime:
+          type: string
+          format: local-date-time
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripStop'
+
+    TripUpdateRequest:
+      type: object
+      properties:
+        driverId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELED, FAILED]
+    TripStopUpdateRequest:
+      type: object
+      properties:
+        actualTime:
+          type: string
+          format: local-date-time
+        status:
+          type: string
+          enum: [ ARRIVED, LOADING_COMPLETED, DROPPED_OFF ]
+    TripSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        destination:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELED, FAILED]
