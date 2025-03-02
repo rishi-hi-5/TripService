@@ -35,17 +35,28 @@ paths:
     get:
       tags:
         - Trips
-      summary: Get a list of all trips (Source & Destination only)
+      summary: Get a paginated list of trips (Source, Destination, Status)
       operationId: getTrips
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
       responses:
         '200':
-          description: A list of trip summaries
+          description: A paginated list of trips
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/TripSummary'
+                $ref: '#/components/schemas/PaginatedTripSummary'
 
   /trips/{id}:
     get:
@@ -217,6 +228,12 @@ components:
           type: string
           format: uuid
           nullable: true
+        source:
+          type: string
+          description: Starting location of the trip (First pickup point)
+        destination:
+          type: string
+          description: Final drop-off location of the trip
         status:
           type: string
           enum: [ PENDING, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELED, FAILED ]
@@ -248,6 +265,9 @@ components:
     TripStop:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
         location:
           type: string
         stopType:
@@ -276,6 +296,12 @@ components:
         loadType:
           type: string
           enum: [PARTIAL_LOAD, DEDICATED_LOAD]
+        source:
+          type: string
+          description: Starting location of the trip (First pickup point)
+        destination:
+          type: string
+          description: Final drop-off location
         scheduledTime:
           type: string
           format: local-date-time
@@ -293,6 +319,12 @@ components:
         vehicleId:
           type: string
           format: uuid
+        source:
+          type: string
+          description: Starting location of the trip (First pickup point)
+        destination:
+          type: string
+          description: Final drop-off location
         status:
           type: string
           enum: [PENDING, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELED, FAILED]
@@ -305,6 +337,19 @@ components:
         status:
           type: string
           enum: [ ARRIVED, LOADING_COMPLETED, DROPPED_OFF ]
+    PaginatedTripSummary:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        currentPage:
+          type: integer
+        trips:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripSummary'
     TripSummary:
       type: object
       properties:

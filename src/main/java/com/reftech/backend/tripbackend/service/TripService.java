@@ -9,10 +9,13 @@ import com.reftech.backend.tripbackend.repository.TripRepository;
 import com.reftech.backend.tripbackend.repository.TripStopRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -23,12 +26,29 @@ public class TripService {
     
     private final TripStopRepository tripStopRepository;
     private final TripStopsMapper tripStopMapper;
-    public Mono<Trip> createTrip(Mono<TripRequest> tripRequestMono) {
-        return tripRequestMono.flatMap(tripRequest -> tripRepository
-                .save(tripMapper.toEntity(tripRequest))
-                .map(tripMapper::toDto));
-    }
 
+    @Transactional
+    public Mono<Trip> createTrip(Mono<TripRequest> tripRequestMono) {
+        return tripRequestMono.flatMap(tripRequest -> {
+            TripEntity trip = tripMapper.toEntity(tripRequest);
+            return tripRepository.save(trip)
+                    .flatMap(tripResponse->{
+                        UUID tripId = tripResponse.getId();
+                        List<TripStopEntity> tripStops = tripRequest.getStops().stream()
+                                .map(tripStopMapper::toEntity)
+                                .peek(tripStop -> tripStop.setTripId(tripId))
+                                .toList();
+
+                        return tripStopRepository.saveAll(tripStops)
+                                .then(tripStopRepository.findByTripId(tripId).collectList())
+                                .map(savedStops -> {
+                                    Trip tripDto = tripMapper.toDto(trip);
+                                    tripDto.setStops(savedStops.parallelStream().map(tripStopMapper::toDto).toList());
+                                    return tripDto;
+                                });
+                    });
+        });
+    }
     public Mono<Void> deleteTrip(UUID id) {
         return tripRepository
                 .findById(id)
@@ -46,13 +66,14 @@ public class TripService {
     public Mono<Trip> getTripById(UUID id) {
         return tripRepository
                 .findById(id)
-                .map(tripMapper::toDto);
-    }
-
-    public Flux<TripSummary> getTrips() {
-        return tripRepository
-                .findAll()
-                .map(tripMapper::toTripSummary);
+                .flatMap(trip -> tripStopRepository
+                        .findByTripId(id)
+                        .collectList()
+                        .map(tripStops -> {
+                            Trip tripDto = tripMapper.toDto(trip);
+                            tripDto.setStops(tripStops.parallelStream().map(tripStopMapper::toDto).toList());
+                            return tripDto;
+                        }));
     }
 
     public Mono<Trip> updateTrip(UUID id, Mono<TripUpdateRequest> tripUpdateRequest) {
@@ -65,6 +86,12 @@ public class TripService {
                     tripEntity.setDriverId(updateRequest.getDriverId());
                     tripEntity.setVehicleId(updateRequest.getVehicleId());
                     tripEntity.setStatus(updateRequest.getStatus().getValue());
+                    if(tripEntity.getStatus().equals("PENDING")) {
+                        tripEntity.setSource(updateRequest.getSource());
+                        tripEntity.setDestination(updateRequest.getDestination());
+                    } else if(isSourceOrDesinationSameWhenNotPending(tripEntity, updateRequest)){
+                        return Mono.error(new RuntimeException("Source and destination cannot be changed for a trip in progress or completed state."));
+                    }
 
                     if(tripEntity.getStatus().equals("COMPLETED")){
                         tripEntity.setEndTime(LocalDateTime.now());
@@ -74,8 +101,17 @@ public class TripService {
 
                     return tripEntity;
                 })
-                .flatMap(tripRepository::save)
-                .map(tripMapper::toDto);
+                .flatMap(tripData-> tripRepository.save((TripEntity) tripData))
+                .zipWith(tripStopRepository.findByTripId(id).collectList())
+                .map(data -> {
+                    Trip tripDto = tripMapper.toDto(data.getT1());
+                    tripDto.setStops(data.getT2().parallelStream().map(tripStopMapper::toDto).toList());
+                    return tripDto;
+                });
+    }
+
+    private static boolean isSourceOrDesinationSameWhenNotPending(TripEntity tripEntity, TripUpdateRequest updateRequest) {
+        return !Objects.equals(tripEntity.getSource(), updateRequest.getSource()) || !Objects.equals(tripEntity.getDestination(), updateRequest.getDestination());
     }
 
     public Mono<Void> addTripStops(UUID id, Flux<TripStop> tripStop) {
@@ -131,5 +167,21 @@ public class TripService {
                         return Mono.error(new RuntimeException("Trip not found"));
                     }
                 }).map(tripStopMapper::toDto);
+    }
+
+    public Mono<PaginatedTripSummary> getTrips(Integer page, Integer size) {
+        int offset = page * size;
+
+        return tripRepository.countTrips()
+                .flatMap(totalElements -> tripRepository.findTripSummaries(size, offset)
+                        .collectList()
+                        .map(trips -> {
+                            PaginatedTripSummary paginatedTripSummary = new PaginatedTripSummary();
+                            paginatedTripSummary.setTotalElements(totalElements.intValue());
+                            paginatedTripSummary.setTotalPages((int) Math.ceil((double) totalElements / size));
+                            paginatedTripSummary.setCurrentPage(page);
+                            paginatedTripSummary.setTrips(trips);
+                            return paginatedTripSummary;
+                        }));
     }
 }

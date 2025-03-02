@@ -4,11 +4,9 @@ import com.reftech.backend.tripbackend.api.*;
 import com.reftech.backend.tripbackend.service.TripService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -40,11 +38,13 @@ public class TripDelegateImpl implements TripsApiDelegate {
                 .map(ResponseEntity::ok);
     }
 
-    public Mono<ResponseEntity<Flux<TripSummary>>> getTrips(ServerWebExchange exchange) {
-        return Mono
-                .just(ResponseEntity
-                        .ok(tripService
-                                .getTrips()));
+    public Mono<ResponseEntity<PaginatedTripSummary>> getTrips(Integer page,
+                                                                Integer size,
+                                                                ServerWebExchange exchange) {
+        return tripService
+                .getTrips(page, size)
+                .map(ResponseEntity::ok);
+
     }
 
     public Mono<ResponseEntity<Trip>> updateTrip(UUID id,

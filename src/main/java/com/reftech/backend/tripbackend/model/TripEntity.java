@@ -2,6 +2,7 @@ package com.reftech.backend.tripbackend.model;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.data.relational.core.mapping.Column;
 
@@ -10,12 +11,15 @@ import java.util.UUID;
 
 @Data
 @AllArgsConstructor
-@NoArgsConstructor
 @Builder
 @Table("trips")
-public class TripEntity {
+public class TripEntity implements Persistable<UUID> {
     @Id
     private UUID id;
+
+    public TripEntity(){
+        this.id = UUID.randomUUID();
+    }
 
     @Column("order_id")
     private UUID orderId;
@@ -31,7 +35,11 @@ public class TripEntity {
     private Double capacity; // Total capacity of the vehicle
     @Column("load_type")
     private String loadType; // ENUM: PARTIAL_LOAD, DEDICATED_LOAD
+    @Column("source")
+    private String source;
 
+    @Column("destination")
+    private String destination;
     @Column("scheduled_time")
     private LocalDateTime scheduledTime;
 
@@ -40,4 +48,9 @@ public class TripEntity {
 
     @Column("end_time")
     private LocalDateTime endTime;
+
+    @Override
+    public boolean isNew() {
+        return id==null;
+    }
 }
